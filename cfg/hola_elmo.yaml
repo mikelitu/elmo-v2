@@ -1,0 +1,58 @@
+model_name: "elmo"
+target_phrases:
+  - "Elmo"
+  - "El mo"
+  - "Elm O"
+  - "Elmo!"
+
+# Training parameters
+n_samples: 4000               # Number of synthetic samples to generate
+n_background_samples: 1000    # Background noise & non-target speech samples
+n_samples_val: 100           # Validation samples
+n_background_samples_val: 100 # Validation background samples
+tts_batch_size: 8
+
+tts_backend: piper_vits
+
+data_dir: ./data
+output_dir: ./output
+
+voxcpm_tts:
+  voice_design_prompts:
+    - "A friendly Spanish voice, clear and articulate, suitable for wake word detection."
+    - "Spanish speaker, young adult female, warm, articulate, neutral accent, friendly and clear tone."
+    - "Young Mexican male, energetic, casual, warm tone, natural conversational rhythm."
+    - "Middle-aged Spanish male from Spain, calm, soft-spoken, deep voice, articulate"
+
+   # --- Professional & Service Voices ---
+    - "Young adult male, energetic, fast-paced, clear, enthusiastic tone."
+    - "Middle-aged female news presenter, formal tone, authoritative, clear diction, measured pacing."
+    - "Elderly male, deep resonant voice, slow pace, authoritative, dramatic, gravelly."
+
+    # --- Character & Expressive Voices ---
+    - "Young adult female, grit in voice, confident, intense, slightly raspy, determined tone."
+    - "Kind elderly woman, gentle, warm, playful, soft-spoken."
+    - "Low-pitched male, cold, deliberate pacing, sinister, raspy undertone."
+
+augmentation:
+  clip_duration: 2.0
+  batch_size: 8
+  rounds: 2
+  background_paths: [./data/backgrounds]
+  rir_paths: [./data/rirs]
+
+model:
+  model_type: "dnn"
+  model_size: tiny
+
+steps: 1000
+learning_rate: 0.001
+max_negative_weight: 1.0
+
+batch_n_per_class:
+  positive: 10
+  adversarial_negative: 10
+  background_noise: 10
+  ACAV100M_sample: 64
+
+# output_format: tflite

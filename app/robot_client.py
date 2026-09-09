@@ -1,106 +1,82 @@
-import socket
-import netifaces
 import requests
-import threading
-
-
-CONTEXT = {
-    "scanning_robots": False,
-    "robot_model": ""
-}
-
-
-
-def set_robot_model(model):
-    CONTEXT["robot_model"] = model
-
-
-def scan_robots(cb, models=[]):
-    def scan_robots_runnable():
-        while CONTEXT["scanning_robots"]:
-            try:
-                interfaces = netifaces.interfaces()
-                allips = []
-                for i in interfaces:
-                    try:
-                        allips.append(netifaces.ifaddresses(i)[netifaces.AF_INET][0]["addr"])
-                    except:
-                        pass
-                msg = b'ruarobot'
-                for ip in allips:
-                    if "127.0.0" in ip:
-                        continue
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)  # UDP
-                    sock.settimeout(1)
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-                    sock.bind((ip,0))
-                    sock.sendto(msg, ("255.255.255.255", 5000))
-                    try:
-                        while True:
-                            data, address = sock.recvfrom(1024)
-                            print(data)
-                            if b"iamarobot" in data:
-                                _, robot_model, robot_name, server_port = data.decode("utf-8").split(";")
-                                if CONTEXT["robot_model"]:
-                                    if robot_model == CONTEXT["robot_model"]:
-                                        cb(robot_name, "http://%s:%s" % (address[0], server_port))
-                                else:
-                                    cb(robot_name, "http://%s:%s" % (address[0], server_port))
-                    except socket.timeout:
-                        sock.close()
-            except:
-                pass
-    CONTEXT["scanning_robots"] = True
-    t = threading.Thread(target=scan_robots_runnable)
-    t.start()
-
-def stop_scan():
-    CONTEXT["scanning_robots"] = False
-
-
-def connect(address):
-    try:
-        return True, "OK", Robot(address)
-    except Exception as e:
-        return False, e, None        
-
+import socket
 
 MAX_ERROR_COUNT = 5
 
 
-class Robot:
-    error_count = 0
+def connect(ip, port=8001, timeout=2):
+    """
+    Connect to a robot with a static IP from WSL.
+    """
+    address = f"http://{ip}:{port}"
 
+    try:
+        # Simple TCP reachability check
+        with socket.create_connection((ip, port), timeout=timeout):
+            pass
+
+        return True, "OK", Robot(address)
+
+    except Exception as e:
+        return False, str(e), None
+
+def set_robot_model(model):
+        robot_model = model
+
+class Robot:
     def __init__(self, address):
         self.address = address
-        self.ip = address.split(":")[1][2:]
+        self.ip = address.split("//")[1].split(":")[0]
+        self.error_count = 0
 
     def update_status(self):
         try:
-            url = self.address + "/status"
-            new_status = requests.get(url, timeout=1).json()
-            for k in new_status:
-                setattr(self, k, new_status[k])
+            r = requests.get(self.address + "/status", timeout=1)
+            r.raise_for_status()
+
+            status = r.json()
+            for k, v in status.items():
+                setattr(self, k, v)
+
             self.error_count = 0
+
         except Exception as e:
+            self.error_count += 1
+            print("Status error:", e)
+
             if self.error_count > MAX_ERROR_COUNT:
                 self.on_disconnect()
-            else:
-                self.error_count += 1
-            print(e)
 
     def send_command(self, command, **kwargs):
         try:
-            url = self.address + "/command"
-            kwargs["op"] = command
-            res = requests.post(url, json=kwargs, timeout=1).json()
-            if not res["success"]:
-                self.on_error(res["message"])
+            payload = {"op": command, **kwargs}
+
+            r = requests.post(
+                self.address + "/command",
+                json=payload,
+                timeout=1
+            )
+            r.raise_for_status()
+
+            res = r.json()
+            if not res.get("success", True):
+                self.on_error(res.get("message", "Unknown error"))
+
         except Exception as e:
-            print(e)
+            print("Command error:", e)
 
     def on_error(self, message):
-        print("Error: " + message)
+        print("Robot error:", message)
 
     def on_disconnect(self):
-        print("Connection to robot lost.")
+        print(f"Connection to robot lost ({self.ip})")
+    
+
+if __name__ == "__main__":
+    # Example usage
+    success, message, robot = connect("192.168.0.4", 8001)
+    print(success, message)
+    if success:
+        robot.update_status()
+        print(robot.__dict__)
+        robot.send_command("play_sound", name="saludo.mp3")

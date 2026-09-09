@@ -5,6 +5,8 @@ import sys
 
 import webbrowser
 
+from config import ROBOT_IP, ROBOT_PORT
+
 from PyQt5.QtCore import (
     Qt,
     QRunnable,
@@ -32,62 +34,6 @@ import robot_client
 import requests
 
 
-class ScanRobotsWorker(QRunnable):
-
-    class Signals(QObject):
-        new_robot = pyqtSignal(str, str)
-    
-    def __init__(self, window):
-        super().__init__()
-        self.window = window
-        self.signals = ScanRobotsWorker.Signals()
-
-    @pyqtSlot()
-    def run(self):
-        self.window.label.setText("Scanning network for robots...")
-        def cb(robot_name, robot_address):
-            self.signals.new_robot.emit(robot_name, robot_address)
-        robot_client.scan_robots(cb)
-
-
-class ScanRobotsDialog(QDialog):
-
-    def __init__(self, window, connect):
-        super().__init__(parent=window)
-        self.connect = connect
-        self.setWindowTitle("Scan Robots")
-        layout = QVBoxLayout()
-
-        robots_container = QWidget()
-        self.clients = QVBoxLayout()
-        robots_container.setLayout(self.clients)
-        self.client_names = []
-
-        button_box = QDialogButtonBox(QDialogButtonBox.Cancel)
-        button_box.rejected.connect(self.reject)
-
-        self.label = QLabel()
-        layout.addWidget(self.label)
-        layout.addWidget(robots_container)
-        layout.addWidget(button_box)
-
-        self.setLayout(layout)
-
-        self.tp = QThreadPool()
-        scan_robots_worker = ScanRobotsWorker(self)
-        scan_robots_worker.signals.new_robot.connect(self.on_new_robot)
-        self.tp.start(scan_robots_worker)
-
-    @pyqtSlot(str, str)
-    def on_new_robot(self, name, address):
-        if name not in self.client_names:
-            btn = QPushButton(name + ": " + address)
-            btn.clicked.connect(lambda: self.connect(address))
-            self.clients.addWidget(btn)
-            self.client_names.append(name)
-    
-
-
 
 class Window(QMainWindow, Ui_MainWindow):
 
@@ -106,13 +52,16 @@ class Window(QMainWindow, Ui_MainWindow):
         self.initialize_camera()
         self.log("Application running.")
 
-        # scan robots on startup
-        robot_client.set_robot_model("elmo")
-        self.client = None
-        self.scan_network.clicked.connect(self.scan_robots)
-        self.reboot.clicked.connect(self.do_reboot)
-        self.shutdown.clicked.connect(self.do_shutdown)
-        self.scan_robots()
+        # Use the information from the static IP robot connection to set the robot model in the client
+        success, message, self.client = robot_client.connect(ROBOT_IP, ROBOT_PORT)
+        if success:
+            robot_client.set_robot_model("elmo")
+            self.client.on_error = self.log
+            self.client.on_disconnect = self.disconnect
+            self.log("Connected to robot at %s:%d" % (ROBOT_IP, ROBOT_PORT))
+        else:
+            QMessageBox.warning(self, "Connection error", message)
+
         self.update()
 
     def log(self, msg, duration=0):
@@ -137,12 +86,7 @@ class Window(QMainWindow, Ui_MainWindow):
             self.is_clearing = False
             self.send_colors()
 
-    def scan_robots(self):
-        dialog = ScanRobotsDialog(self, self.connect)
-        self.dialog = dialog
-        dialog.exec_()
-        robot_client.stop_scan()
-    
+
     def do_reboot(self):
         if self.client is not None:
             if QMessageBox.Ok == QMessageBox.warning(self, "Confirm", "Reboot?", buttons=QMessageBox.Ok | QMessageBox.Cancel):
