@@ -1,49 +1,49 @@
 import torch
 import torch.nn as nn
-from speechbrain.inference.speaker import EncoderClassifier
+from speechbrain.inference.speaker import SpeakerRecognition
 
-# 1. Load full classifier
-classifier = EncoderClassifier.from_hparams(
+# Load pre-trained SpeechBrain model
+sb_model = SpeakerRecognition.from_hparams(
     source="speechbrain/spkrec-ecapa-voxceleb",
-    savedir="tmp_model"
+    savedir="tmp_sb_model"
 )
 
-# 2. Define end-to-end wrapper module
-class ECAPAWrapper(nn.Module):
-    def __init__(self, classifier):
+class ECAPAEncoderOnly(nn.Module):
+    """Wraps Normalization + ECAPA_TDNN to bypass STFT ONNX tracing errors."""
+    def __init__(self, mods):
         super().__init__()
-        self.compute_features = classifier.mods.compute_features
-        self.mean_var_norm = classifier.mods.mean_var_norm
-        self.embedding_model = classifier.mods.embedding_model
+        self.mean_var_norm = mods.mean_var_norm
+        self.embedding_model = mods.embedding_model
 
-    def forward(self, wavs):
-        # wavs shape: (batch_size, samples) e.g., (1, 16000)
-        feats = self.compute_features(wavs)
-        
-        # Apply length/mask normalization if needed
-        lengths = torch.ones(feats.shape[0], device=wavs.device)
-        feats = self.mean_var_norm(feats, lengths)
-        
-        # Pass 3D log-mel features into ECAPA-TDNN
-        embeddings = self.embedding_model(feats)
+    def forward(self, feats):
+        # feats shape: [batch_size, time_frames, num_mels (80)]
+        lengths = torch.ones(feats.shape[0], device=feats.device)
+        norm_feats = self.mean_var_norm(feats, lengths)
+        embeddings = self.embedding_model(norm_feats)
         return embeddings
 
-# 3. Export to ONNX using legacy tracer mode (dynamo=False avoids export graph issues)
-model_to_export = ECAPAWrapper(classifier).eval()
-dummy_wav = torch.randn(1, 32000) # 2 seconds of 16kHz audio
+# Prepare wrapper
+encoder_wrapper = ECAPAEncoderOnly(sb_model.mods)
+encoder_wrapper.eval()
+
+# Dummy input representing Mel-Filterbank Features [Batch=1, Frames=301, Mel_Bins=80]
+dummy_feats = torch.randn(1, 301, 80, dtype=torch.float32)
+
+onnx_filename = "ecapa_tdnn_encoder.onnx"
 
 torch.onnx.export(
-    model_to_export,
-    dummy_wav,
-    "ecapa_tdnn.onnx",
-    input_names=["speech_wav"],
-    output_names=["embedding"],
-    dynamic_axes={
-        "speech_wav": {1: "num_samples"},
-        "embedding": {0: "batch_size"}
-    },
+    encoder_wrapper,
+    dummy_feats,
+    onnx_filename,
+    export_params=True,
     opset_version=17,
-    dynamo=False  # Crucial to bypass PyTorch 2.x strict export tracing
+    do_constant_folding=True,
+    input_names=['mel_features'],
+    output_names=['embedding'],
+    dynamic_axes={
+        'mel_features': {0: 'batch_size', 1: 'time_frames'},
+        'embedding': {0: 'batch_size'}
+    }
 )
 
-print("Export successful!")
+print(f"ONNX Encoder model successfully exported to {onnx_filename}")

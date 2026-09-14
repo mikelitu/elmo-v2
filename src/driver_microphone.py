@@ -1,54 +1,66 @@
 #! /usr/bin/env python
 
-
-"""
-
-Driver node.
-
-This node manages the microphone.
-
-Stores captured audio to wave file called mic.wav, in the multimedia server's static resource folder.
-
-"""
-
 import subprocess
-import time
 import os
-
+import time
+import redis
 import middleware as mw
 
 
 class DriverMicrophone:
     def __init__(self):
-        """
-        Connect to middleware.
-        Initialize node.
-        """
         self.node = mw.Node("driver_microphone")
         self.microphone = mw.Microphone()
-        self.server = mw.Server()
-        self.recording_process = None
-        # Get microphone target from environment or config, use None for default device
         self.microphone_target = os.environ.get("MICROPHONE_TARGET")
+        
+        # Connect to Redis
+        self.redis_client = redis.Redis(
+            host=os.environ.get("REDIS_HOST", "localhost"),
+            port=int(os.environ.get("REDIS_PORT", 6379)),
+            db=0
+        )
+        self.recording_process = None
+        
+        # 1280 samples * 2 bytes/sample (16-bit) = 2560 bytes chunk size
+        self.chunk_bytes = 2 * 2560 
 
-    def start_recording_audio(self):
-        # start recording audio using pw-record (PipeWire native)
-        output_file = f"{self.server.static_path}/sounds/mic.wav"
-        cmd = ["pw-record", "--format=s16", "--channels=1", "--rate=44100", output_file]
-        # Add target only if specified (uses system default if not)
+    def start_streaming_audio(self):
+        """Spawns pw-record sending raw PCM bytes directly to stdout."""
+        cmd = [
+            "pw-record", 
+            "--format=s16", 
+            "--channels=1", 
+            "--rate=16000", 
+            "-"  # Send raw binary stream to stdout
+        ]
+        
         if self.microphone_target:
             cmd.insert(1, "--target")
             cmd.insert(2, self.microphone_target)
 
-        self.recording_process = subprocess.Popen(cmd)
+        self.recording_process = subprocess.Popen(
+            cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.DEVNULL, 
+            bufsize=0
+        )
         self.microphone.is_recording = True
 
-    def stop_recording_audio(self):
-        # stop recording audio #TODO Validate and handle errors, logging
+    def _read_exact(self, num_bytes):
+        """Helper to guarantee reading full byte chunks from stdout stream."""
+        data = bytearray()
+        while len(data) < num_bytes:
+            packet = self.recording_process.stdout.read(num_bytes - len(data))
+            if not packet:
+                break
+            data.extend(packet)
+        return bytes(data)
+
+    def stop_streaming_audio(self):
         if self.recording_process:
             self.recording_process.terminate()
             try:
-                self.recording_process.wait(timeout=5)
+                self.recording_process.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 self.recording_process.kill()
                 self.recording_process.wait()
@@ -56,20 +68,30 @@ class DriverMicrophone:
         self.microphone.is_recording = False
 
     def run(self):
-        """
-        Main loop.
-        """
         try:
             self.microphone.ready = True
+            self.start_streaming_audio()
+            
             while not self.node.is_shutdown():
-                time.sleep(0.1)
-                if self.microphone.record and not self.microphone.is_recording:
-                    self.start_recording_audio()
-                elif not self.microphone.record and self.microphone.is_recording:
-                    self.stop_recording_audio()
+                if self.recording_process and self.recording_process.stdout:
+                    # Guarantee reading exactly self.chunk_bytes
+                    raw_pcm_data = self._read_exact(self.chunk_bytes)
+                    
+                    if len(raw_pcm_data) == self.chunk_bytes:
+                        # maxlen=100 keeps up to 100 entries in the stream history
+                        self.redis_client.xadd(
+                            "robot:mic_stream", 
+                            {"pcm": raw_pcm_data}, 
+                            maxlen=100, 
+                            approximate=True
+                        )
+                else:
+                    time.sleep(0.01)
+
         except KeyboardInterrupt:
             pass
         finally:
+            self.stop_streaming_audio()
             self.node.shutdown()
 
 
