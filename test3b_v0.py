@@ -7,7 +7,7 @@ from elevenlabs.client import ElevenLabs
 from elevenlabs.play import play
 
 # 0. CONFIGURACIÓN CLIENTES
-client = ElevenLabs(api_key="sk_24df57d7e4df12509eb0c18ac689f059b418f469015e9d7b")
+client = ElevenLabs(api_key="ELEVENLABS_API_KEY")
 
 # MODELO OLLAMA A USAR
 MODELO_OLLAMA = "naye8b"
@@ -39,7 +39,7 @@ print(f"\nNAYE: {texto_saludo}\n")
 
 audio_saludo = client.text_to_speech.convert(
     text=texto_saludo,
-    voice_id="V0wJiFHvBulVpU9dW2K1",
+    voice_id="ID_VOICE_ELEVENLABS",
     model_id="eleven_multilingual_v2"
 )
 play(audio_saludo)
@@ -79,7 +79,7 @@ try:
 
             audio_respuesta = client.text_to_speech.convert(
                 text=respuesta_filtro,
-                voice_id="V0wJiFHvBulVpU9dW2K1",
+                voice_id="ID_VOICE_ELEVENLABS",
                 model_id="eleven_multilingual_v2",
             )
             play(audio_respuesta)
