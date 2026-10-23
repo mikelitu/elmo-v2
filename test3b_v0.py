@@ -1,4 +1,4 @@
-# TRANSCRIBE LO QUE LE DICES Y REPRODUCE SU RESPUESTA EN TIEMPO REAL (STREAMING + FILTRO DE CORTESÍA)
+# TRANSCRIBE LO QUE LE DICES Y REPRODUCE SU RESPUESTA EN TIEMPO REAL (STREAMING + FILTRO)
 import ollama
 import whisper
 import speech_recognition as sr
@@ -67,7 +67,7 @@ try:
 
         print(f"\nTRANSCRIPCIÓN: {texto_usuario}")
 
-        # INTERCEPCIÓN DIRECTA DE CORTESÍAS/MONOSÍLABOS EN EL PRIMER PASO
+        # INTERCEPCIÓN DIRECTA DE MONOSÍLABOS EN EL PRIMER PASO
         texto_limpio = texto_usuario.lower().strip(".!?,")
 
         if len(historial_mensajes) <= 2 and texto_limpio in CORTESIAS_INICIALES:
