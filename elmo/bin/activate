@@ -37,7 +37,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV=/home/mdeiturrate/elmo-v2/elmo
+VIRTUAL_ENV=/home/maria/elmo-v2/elmo
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

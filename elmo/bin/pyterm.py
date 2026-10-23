@@ -1,4 +1,4 @@
-#!/home/mdeiturrate/elmo-v2/elmo/bin/python
+#!/home/maria/elmo-v2/elmo/bin/python3.9
 
 """Simple Python serial terminal
 """

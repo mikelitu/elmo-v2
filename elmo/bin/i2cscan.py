@@ -1,4 +1,4 @@
-#!/home/mdeiturrate/elmo-v2/elmo/bin/python
+#!/home/maria/elmo-v2/elmo/bin/python3.9
 # -*- coding: utf-8 -*-
 
 # Copyright (c) 2018-2024, Emmanuel Blot <emmanuel.blot@free.fr>
