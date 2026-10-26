@@ -1,9 +1,9 @@
 ```mermaid
 flowchart TD
-    UI["Touchscreen UI"] --> API["robot_api.py"]
+    UI["Pantalla Táctil"] --> API["robot_api.py"]
     
-    API -->|Try Direct Push: Success| DB[("Central Remote Platform DB")]
-    API -->|Wi-Fi Down| QUEUE[("Local SQLite Buffer Queue")]
+    API -->|Intentar conexión directa: Éxito| DB[("DB de la plataforma central")]
+    API -->|Wi-Fi Caído| QUEUE[("Buffer local SQLite")]
     
-    QUEUE -->|Sync when connection restores| DB
+    QUEUE -->|Sync cuando vuelve la conexión| DB
 ```
