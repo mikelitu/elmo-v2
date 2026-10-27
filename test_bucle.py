@@ -7,7 +7,7 @@ from elevenlabs.client import ElevenLabs
 from elevenlabs.play import play
 
 # 0. CONFIGURACIÓN CLIENTES
-client = ElevenLabs (api_key="sk_62ed49c31c3c795b6d5c0e55475c333033492fc0128e7d66")
+client = ElevenLabs (api_key="ELEVENLABS_API_KEY")
 
 # 1. WHISPER
 print("CARGANDO WHISPER MEDIUM")
@@ -26,7 +26,7 @@ historial_mensajes = []
 texto_saludo = "¡Hola! Soy Naye, ¿cómo te encuentras hoy?"
 audio_saludo = client.text_to_speech.convert(
   text=texto_saludo,
-  voice_id="k14jZvkeJMVl6j0iG4G4",
+  voice_id="VOICE_ID",
   model_id="eleven_multilingual_v2"
 )
 play(audio_saludo)
@@ -73,7 +73,7 @@ try:
     print("REPRODUCIENDO RESPUESTA")
     audio_respuesta = client.text_to_speech.convert(
       text=respuesta_final,
-      voice_id="k14jZvkeJMVl6j0iG4G4",
+      voice_id="VOICE_ID",
       model_id="eleven_multilingual_v2",
       # output_format="mp3_44100_128",
     )
